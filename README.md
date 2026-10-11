@@ -5,6 +5,8 @@ A reusable Codex skill that turns a Google Scholar author profile and a user-pro
 - **`report.html`** — an English report with totals, per-paper counts, searchable citation details, and classification evidence.
 - **`independent_citations.csv`** — one row per independent citation relationship, ready to open in Excel or process in Python.
 
+Note: one or two other repos (e.g., https://github.com/guaguakai/Automated-Independent-Citations) aimed at the same thing. The existing tool relies on exact author-name matching and treats truncated author lists as complete, which can misclassify citations. This skill prioritizes Scholar author IDs, handles name variations, flags incomplete author lists, and exports an auditable HTML report and independent-citation CSV. Our skill relies on SeriApi avoiding repeatedly crawling by ourselves, and the free api key can support weekly query of an author with a few thousand citations.
+
 ## What counts as an independent citation?
 
 A citing paper is independent of a source paper when they share **no authors**, including the profile owner. Classification is per source paper: a citing article citing two source papers contributes two citation relationships. The report separately shows an approximate count of distinct independent citing articles.
