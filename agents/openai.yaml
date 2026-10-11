@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scholar Independent Citations"
+  short_description: "Export Scholar independent citations to HTML and CSV"
+  default_prompt: "Use $scholar-independent-citations with my Google Scholar profile link and SerpApi key to create an English HTML report and independent_citations.csv."
