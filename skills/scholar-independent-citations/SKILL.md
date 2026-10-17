@@ -1,54 +1,93 @@
 ---
 name: scholar-independent-citations
-description: Given a Google Scholar author profile URL and a SerpApi key, collect citing papers, exclude citations sharing any author with each cited paper, and produce an English HTML report and independent_citations.csv. Use for Scholar-based independent citation counts and citation-list exports.
+description: Collect a Google Scholar profile, audit cited and citing author lists, apply evidence-bound reviewed decisions, and export independent citation candidates with an English HTML report. Replay an existing reviewed analysis from its private evidence bundle.
 ---
 
 # Scholar Independent Citations
 
-Produce two user-facing files: `report.html` and `independent_citations.csv`. All report labels, explanations, statuses, and CSV headers are English. Preserve original article titles and author names. Return clickable links to both files and the independent/non-independent counts.
+Produce `report.html` and `independent_citations.csv`. Keep all original source/result
+relationships separate, including separately indexed versions. Return both links,
+counts, evidence tiers and any unresolved cases. Do not describe candidates as a
+complete identity or citation-context audit.
 
-## Inputs and execution
+## Choose the workflow
 
-Obtain a Scholar author profile URL (`https://scholar.google.com/citations?user=...`) and SerpApi key. Ask only for missing inputs; otherwise proceed with this authorized read-only workflow.
-
-Run with Python 3.9+ (standard library only):
-
-```sh
-SERPAPI_API_KEY='<provided key>' python3 <skill-directory>/scripts/report.py \
-  --scholar-url '<provided profile URL>' \
-  --output-dir '<absolute writable output directory>'
-```
-
-Pass the key through the process environment; never save it in skill files, code, reports, logs, or caches, and do not repeat it in user-facing text. Use the environment's network approval mechanism when required. No dependency installation or browser login is needed.
-
-Use a new output directory for each fresh snapshot. Internal caches live in `<output>/.scholar-cache/<author-id>/`; reuse that directory to resume, not to refresh. `REPORT_TIMEZONE` overrides the default `America/New_York` snapshot date. Default budget: 200 new SerpApi requests per run, adjustable with `--request-budget`. If reached, report saved progress and resume within the user's authorized budget; never silently drop remaining papers. Authentication/network errors stop without logging the key or request URL.
-
-## Classification policy — preserve exactly
-
-- Exclude citations sharing **any** author with the cited paper, including the profile owner. Compare per paper, not against all lifetime collaborators.
-- **Scholar is authoritative.** Do not require external confirmation of an untruncated Scholar author record.
-- Compare Scholar author IDs when both sides have them. Equal IDs mean shared authors; different IDs take precedence over similar names.
-- Otherwise compare normalized names and conventional surname/initial forms. `T Xie` matches `Tian Xie`; `X Zhang` matches `Xueru Zhang`. These are definitive non-independent matches under the user's chosen convention. Initials, same-name possibilities, and lack of publisher confirmation do **not** cause uncertainty.
-- **Only explicit author-list ellipses (`…` or `...`) justify unresolved classification.** Ignore ellipses in venues, titles, or snippets. A visible shared author already proves non-independence despite omitted remaining authors.
-- For author ellipses only, the script attempts full authors from the article page or a strictly title-matched Crossref record. If successful, classify normally; otherwise retain unresolved status. Never guess omitted authors.
-- Missing author data is a collection failure to investigate, not a guessed independent citation. Incomplete retrieval is a coverage problem, distinct from author uncertainty.
-- Count citation relationships per cited paper. One article citing two source papers counts twice. Separately show approximate independent article count deduplicated by normalized title.
-
-## Collection and delivery
-
-The bundled script gets paginated papers, full source-paper Scholar authors, and accessible `Cited by` pages through SerpApi's `google_scholar_author` and `google_scholar` engines. It caches sanitized results. No actual keys, fixed author IDs, titles, or prior results are embedded in this skill.
-
-The English HTML contains totals, per-paper counts, searchable/filterable citation details, reasons, evidence links, and a CSV download link. CSV rows include both paper titles, authors, citing year, links, and classification basis.
-
-Validate that status counts sum to retrieved citation relationships; per-paper counts reconcile; CSV row count equals independent count. Compare retrieved and displayed counts. Mark incomplete coverage explicitly when they differ or Scholar's 1,000-result limit is reached. The collector does not yet implement date partitions beyond that limit; never claim complete collection then.
-
-Offline regeneration without API or metadata requests:
+For a fresh profile, use the recommended full-author audit:
 
 ```sh
 python3 <skill-directory>/scripts/report.py \
-  --snapshot '<cache-directory>/collected.json' \
-  --cache-dir '<cache-directory>' \
-  --output-dir '<output-directory>' --offline
+  --scholar-url '<profile URL>' --full-author-audit \
+  --output-dir '<new writable output directory>'
 ```
 
-Optional verified full author lists belong in `<cache-directory>/reviewed_authors.json`, keyed by exact citing title with `authors` and `source` fields. Use them only for actual author ellipses, after checking that source. Internal `audit.json` records all classifications for verification. The only default user-facing deliverables are the HTML and independent CSV.
+Use Python 3.9+ with the standard library and a configured `SERPAPI_API_KEY`.
+Use an existing environment variable or user-designated credential file; do not
+print or save the key in code, logs, reports or evidence bundles. Ask only for
+missing inputs. TLS verification remains enabled. No browser login is required.
+A fresh collection requires SerpApi quota; metadata lookup and historical replay
+use no new SerpApi collection searches.
+
+If the user supplies reviewed evidence, add `--evidence-bundle '<manifest.json>'`.
+For reproducing that exact historical reviewed result, use only:
+
+```sh
+python3 <skill-directory>/scripts/report.py \
+  --evidence-bundle '<reviewed manifest.json>' --replay \
+  --output-dir '<new writable output directory>'
+```
+
+Replay takes its snapshot and profile from the manifest, validates retained
+sources, reclassifies each pair, and reapplies explicit reviewed decisions.
+It never recollects Scholar or fetches public metadata. Do not substitute a fresh
+live profile and claim it reproduces the same historical relationship set.
+Keep the referenced evidence files available and private.
+
+## Full-author policy
+
+- Compare per cited paper, including its profile owner and coauthors. A paper
+  citing two source papers contributes two relationships.
+- Inspect complete citing and source bylines, including untruncated Scholar lists
+  and records already excluded from initials. Prefer trusted Scholar IDs where
+  both sides have them. Different explicit IDs take precedence over similar names.
+- Compare full normalized names next. Compatible initials alone remain unresolved.
+  Distinct spelled-out names such as short given names must not be treated as
+  initials. Never infer an author ID from a matching title, affiliation or topic.
+- A recovered byline must cover visible authors and identify the correct record.
+  Anonymous lists, candidate collisions and unaccounted-for missing authors stay
+  unresolved. A failed route does not prove that no public byline exists.
+- Use reviewed document bylines, source identities, non-author-role corrections
+  and record links only with retained, hash-bound evidence. Never guess omitted
+  authors or strip suspected affiliation letters without explicit source evidence.
+- Same-name matches receive identity warnings. Apply an approved relationship
+  correction only to its exact source/result pair and matching bylines. Do not
+  turn one reviewed name collision into a global identity rule.
+- Record links can support metadata reuse; they never merge archived citations.
+
+The original naming-convention policy remains available by omitting the full-audit
+flag and bundle. Use it only if that compatibility policy is specifically wanted;
+its initials-as-shared-author rule and ellipsis-only enrichment differ from the
+recommended audit. Label comparisons by their actual mode.
+
+## Resume, review and retain
+
+Use a new output directory for a fresh snapshot. Reusing a cache resumes it.
+`--request-budget` controls new collection searches (default 200). Respect the
+user's authorized quota. Coverage limits, including Scholar's 1,000-result query
+cap, remain separate from author uncertainty; never hide missing relationships.
+
+In full-author mode, `--retry-unresolved` reconsiders incomplete metadata and
+negative HTTP cache entries. With `--offline` it uses retained responses only.
+Historical `--replay` does not accept retry or fresh-collection flags.
+
+Use `--export-evidence-bundle '<new manifest.json>'` to freeze author metadata
+and the replay inputs. Referenced source documents remain in place and are not
+modified or copied. The legacy `reviewed_authors.json` title-keyed hook applies
+only to the original compatibility workflow; use evidence bundles for full-audit
+bylines and pair-specific identity decisions.
+
+Check all relationship keys, per-paper counts, evidence tiers, CSV rows and
+classification sums. Report explicit manual decisions as reviewed rather than
+automatically discovered. The default visible outputs remain the two report
+files; rich evidence, rejection reasons and provenance live in the internal audit.
+For the bundle schema and full commands see `docs/reviewed-author-audit.md` in
+the repository.
