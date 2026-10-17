@@ -14,7 +14,7 @@ A citing paper is independent of a source paper when they share **no authors**, 
 Google Scholar is the authoritative record:
 
 1. Compare Scholar author IDs when both sides provide them.
-2. Otherwise compare normalized names and conventional initials: for example, `J Smith` matches `John Smith`.
+2. Otherwise compare normalized names and conventional initials: for example, `J Example` matches `John Example`.
 3. Only explicit **author-list ellipses** require additional checking. Ellipses in venue names do not matter. Short names or missing publisher confirmation do not create an unresolved classification.
 4. For omitted authors, attempt to retrieve a complete author list from the article page or a title-matched Crossref record. Retain unresolved status if this fails.
 
@@ -60,6 +60,44 @@ The default per-run budget is 200 new SerpApi requests. Set `--request-budget` t
 
 ## Development
 
+### Author metadata recovery
+
+Enrichment preserves uniquely aligned Scholar author IDs when expanding names,
+normalizes surname-first author fields, and checks automatic supplements against
+the visible byline. Anonymous placeholders, omitted visible authors and
+conflicting title-matched bylines do not establish a complete author list.
+The existing Scholar-ID and initials classification rules remain in place;
+this is metadata validation, not automatic person disambiguation.
+
+Publisher lookup supports arXiv abstract pages and IEEE's embedded author JSON.
+Explicit DOI information is retained from known PDF URL forms without fetching
+the PDF. OpenReview lookup uses the original case-sensitive note ID on official
+API hosts, with a bounded search fallback when direct lookup is unavailable.
+OpenReview profile identifiers are not treated as Scholar author IDs. A matching
+record identifier can support a title variant without choosing another paper by
+search rank. Separately indexed Scholar records remain separately counted.
+
+Metadata HTTP requests have bounded retries for temporary failures. Long
+Retry-After delays, permanent errors and browser verification are not repeatedly
+retried in place. Failed derived metadata stays cached until explicitly retried;
+successful metadata is reused and revalidated. To reconsider incomplete metadata
+without recollecting Scholar, reuse the snapshot:
+
+```sh
+python3 skills/scholar-independent-citations/scripts/report.py \
+  --snapshot './output/.scholar-cache/AUTHOR_ID/collected.json' \
+  --cache-dir './output/.scholar-cache/AUTHOR_ID' \
+  --output-dir './retried-report' --retry-unresolved
+```
+
+This metadata-only command makes no new SerpApi collection searches. It requires
+public metadata access, so `--retry-unresolved` cannot be combined with
+`--offline`. Metadata caches retain sanitized lookup attempts and timestamps;
+unresolved report entries summarize the last attempted route. A failed route
+means the byline was not obtained through that route, not that authors are
+unavailable everywhere. The documented `reviewed_authors.json` input remains
+available for checked manual bylines.
+
 Run local tests without making API requests:
 
 ```sh
@@ -73,3 +111,34 @@ The tests cover ID precedence, initial matching, author ellipses, per-paper clas
 ## License
 
 [MIT](LICENSE)
+
+## Full author audit (optional)
+
+Use `--full-author-audit` to inspect citing and cited bylines beyond the normal
+ellipsis-only supplement workflow. It includes records already classified from
+initials and untruncated lists. Source bylines can establish full names and middle
+initials. This mode uses trusted Scholar IDs first, then full normalized names;
+compatible initials remain unresolved. It does not infer person identities from
+affiliations, coauthors, topics or approximate titles. Exact same-name exclusions
+still need the review warnings from the paired-author interface.
+
+```sh
+python3 skills/scholar-independent-citations/scripts/report.py \
+  --scholar-url 'https://scholar.google.com/citations?user=AUTHOR_ID' \
+  --output-dir './audited-output' --full-author-audit
+```
+
+The audit checks primary metadata, exact OpenReview notes, explicit identifiers,
+Crossref and OpenAlex. Author-list completeness limits and conflicting candidates
+remain visible. DBLP XML and alternate/version URLs can be supplied as discovery
+evidence. Already reviewed document bylines, source identities and record links
+can be supplied through the audit API; the evidence-bundle follow-up adds the CLI
+workflow for those inputs. Full-audit caches retain author evidence and rejected
+candidates. No PDF extraction or automatic same-name disambiguation is performed.
+
+The standard-library implementation keeps Python 3.9 support and the same two
+default report files and thirteen CSV columns. Richer evidence levels and source
+author provenance stay in the internal audit. `--offline` never acquires metadata.
+The legacy Scholar-convention mode remains the default for compatibility.
+Use the paired-author interface change with this mode so the HTML presents the
+correct policy and evidence levels.

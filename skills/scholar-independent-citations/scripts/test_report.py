@@ -1,3 +1,4 @@
+"""Fictional fixtures only; no user archive, credentials or live requests."""
 import csv
 from pathlib import Path
 import tempfile
@@ -10,31 +11,31 @@ from collect import collect, Scholar
 
 class ReportTests(unittest.TestCase):
     def setUp(self):
-        self.authors=['Tian Xie','Xueru Zhang']
-        self.ids={name_key('Tian Xie'):'A',name_key('Xueru Zhang'):'B'}
+        self.authors=['Taren Example','Xerin Sample']
+        self.ids={name_key('Taren Example'):'A',name_key('Xerin Sample'):'B'}
 
     def test_id_precedence(self):
-        self.assertEqual(classify(self.authors,[{'name':'X Zhang','author_id':'C'}],self.ids,False)[0],'independent')
+        self.assertEqual(classify(self.authors,[{'name':'X Sample','author_id':'C'}],self.ids,False)[0],'independent')
         self.assertEqual(classify(self.authors,[{'name':'Different Name','author_id':'B'}],self.ids,True)[0],'non_independent')
 
     def test_initial_match_is_definitive(self):
-        self.assertEqual(classify(self.authors,[{'name':'X Zhang'}],self.ids,False)[0],'non_independent')
-        self.assertEqual(classify(self.authors,[{'name':'B Daniels'}],self.ids,False)[0],'independent')
+        self.assertEqual(classify(self.authors,[{'name':'X Sample'}],self.ids,False)[0],'non_independent')
+        self.assertEqual(classify(self.authors,[{'name':'B Sample'}],self.ids,False)[0],'independent')
 
     def test_ellipsis_only_in_author_part(self):
-        _,cut=scholar_record({'title':'Paper','publication_info':{'summary':'B Daniels - … Conference …, 2025'}})
+        _,cut=scholar_record({'title':'Paper','publication_info':{'summary':'B Sample - … Conference …, 1999'}})
         self.assertFalse(cut)
-        authors,cut=scholar_record({'title':'Paper','publication_info':{'summary':'B Daniels… - Conference, 2025'}})
+        authors,cut=scholar_record({'title':'Paper','publication_info':{'summary':'B Sample… - Conference, 1999'}})
         self.assertEqual(classify(self.authors,authors,self.ids,cut)[0],'unresolved')
 
     def test_per_paper_rule(self):
-        citing=[{'name':'Z Zuo'}]
+        citing=[{'name':'Z Fixture'}]
         self.assertEqual(classify(self.authors,citing,self.ids,False)[0],'independent')
-        self.assertEqual(classify(['Tian Xie','Zhiqun Zuo'],citing,self.ids,False)[0],'non_independent')
+        self.assertEqual(classify(['Taren Example','Zevin Fixture'],citing,self.ids,False)[0],'non_independent')
 
     def test_unicode_names_do_not_collapse(self):
-        self.assertEqual(classify(['张三'],[{'name':'李四'}],{},False)[0],'independent')
-        self.assertEqual(classify(['张三'],[{'name':'张三'}],{},False)[0],'non_independent')
+        self.assertEqual(classify(['例甲'],[{'name':'例乙'}],{},False)[0],'independent')
+        self.assertEqual(classify(['例甲'],[{'name':'例甲'}],{},False)[0],'non_independent')
 
     def test_missing_authors_is_explicit_failure(self):
         with self.assertRaises(ValueError):
@@ -44,7 +45,7 @@ class ReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
             (root/'profile_OTHER.json').write_text('{}')
-            data={'author_id':'OTHER','author':{'name':'Other Person'},'snapshot_date':'2026-10-11','papers':[]}
+            data={'author_id':'OTHER','author':{'name':'Other Person'},'snapshot_date':'2000-01-01','papers':[]}
             r=generate(data,root,root/'output',True)
             self.assertEqual(r['retrieved'],0)
             self.assertEqual(sorted(p.name for p in (root/'output').iterdir()),['independent_citations.csv','report.html'])
@@ -63,7 +64,7 @@ class ReportTests(unittest.TestCase):
         def fake_get(api,path,**params):
             if params.get('view_op')=='view_citation':
                 cid=params['citation_id']
-                return {'citation':{'authors':'Other Person, Alex Smith',
+                return {'citation':{'authors':'Other Person, Alex Example',
                                     'total_citations':{'cited_by':{'cites_id':'CITES'}} if cid=='OTHER:1' else {}}}
             if params['engine']=='google_scholar_author':
                 if params.get('start')==100:

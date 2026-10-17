@@ -28,9 +28,10 @@ Use a new output directory for each fresh snapshot. Internal caches live in `<ou
 - Exclude citations sharing **any** author with the cited paper, including the profile owner. Compare per paper, not against all lifetime collaborators.
 - **Scholar is authoritative.** Do not require external confirmation of an untruncated Scholar author record.
 - Compare Scholar author IDs when both sides have them. Equal IDs mean shared authors; different IDs take precedence over similar names.
-- Otherwise compare normalized names and conventional surname/initial forms. `T Xie` matches `Tian Xie`; `X Zhang` matches `Xueru Zhang`. These are definitive non-independent matches under the user's chosen convention. Initials, same-name possibilities, and lack of publisher confirmation do **not** cause uncertainty.
+- Otherwise compare normalized names and conventional surname/initial forms. `T Example` matches `Taren Example`; `X Sample` matches `Xerin Sample`. These are definitive non-independent matches under the user's chosen convention. Initials, same-name possibilities, and lack of publisher confirmation do **not** cause uncertainty.
 - **Only explicit author-list ellipses (`…` or `...`) justify unresolved classification.** Ignore ellipses in venues, titles, or snippets. A visible shared author already proves non-independence despite omitted remaining authors.
 - For author ellipses only, the script attempts full authors from the article page or a strictly title-matched Crossref record. If successful, classify normally; otherwise retain unresolved status. Never guess omitted authors.
+- Automatic supplements must cover visible authors and preserve uniquely aligned Scholar IDs. Supported metadata routes include arXiv abstract pages, IEEE embedded JSON and exact-note OpenReview APIs. A stable original record ID can establish a title variant. Do not substitute another submission by title similarity or infer Scholar IDs from another provider's author identifiers.
 - Missing author data is a collection failure to investigate, not a guessed independent citation. Incomplete retrieval is a coverage problem, distinct from author uncertainty.
 - Count citation relationships per cited paper. One article citing two source papers counts twice. Separately show approximate independent article count deduplicated by normalized title.
 
@@ -52,3 +53,21 @@ python3 <skill-directory>/scripts/report.py \
 ```
 
 Optional verified full author lists belong in `<cache-directory>/reviewed_authors.json`, keyed by exact citing title with `authors` and `source` fields. Use them only for actual author ellipses, after checking that source. Internal `audit.json` records all classifications for verification. The only default user-facing deliverables are the HTML and independent CSV.
+
+To retry unsuccessful metadata without recollecting Scholar, rerun with
+`--snapshot '<cache-directory>/collected.json' --cache-dir '<cache-directory>'`
+and `--retry-unresolved`, using a new output directory. Successful cached
+supplements are reused and revalidated. This accesses public author metadata;
+do not combine it with `--offline`. Metadata failures retain sanitized lookup
+diagnostics. Describe failures as routes attempted rather than proof that a
+byline is unavailable. Do not merge separately indexed Scholar results or add
+automatic same-name author disambiguation.
+
+### Full author audit
+
+For broader metadata checking, add `--full-author-audit` to the normal command.
+It checks both cited and citing bylines, including untruncated records and earlier
+initial-based exclusions. In this explicit mode, compatible initials are
+unresolved rather than proof of shared identity. Full names and trusted Scholar
+IDs still drive classification; name-based exclusions need identity review.
+The legacy default is unchanged. Keep every archived source/result pair separate.

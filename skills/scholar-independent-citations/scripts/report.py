@@ -10,11 +10,11 @@ import re
 import unicodedata
 import urllib.parse
 from collect import collect
-from enrich_authors import enrich
+from enrich_authors import enrich, canonical_name, validate_supplement, align_authors, visible_authors
 
 
 def words(name):
-    name = unicodedata.normalize('NFKD', name).casefold()
+    name = unicodedata.normalize('NFKD', canonical_name(name)).casefold()
     name = ''.join(c for c in name if not unicodedata.combining(c))
     return re.findall(r'[^\W\d_]+', name, re.UNICODE)
 
@@ -89,7 +89,7 @@ def classify(originals, citing, ids, truncated):
     return 'independent', '', 'No shared author in Scholar record'
 
 
-def generate(data, cache, output, offline=False):
+def generate(data, cache, output, offline=False, retry_unresolved=False, full_author_audit=False, audit_options=None):
     profile_path = cache / f"profile_{data['author_id']}.json"
     if not profile_path.exists():
         profile_path = cache / 'profile.json'  # legacy snapshot support
@@ -97,6 +97,11 @@ def generate(data, cache, output, offline=False):
     ids = known_ids(data, profile)
     reviewed_path = cache / 'reviewed_authors.json'
     reviewed = json.loads(reviewed_path.read_text()) if reviewed_path.exists() else {}
+    if full_author_audit:
+        from author_audit import run_audit
+        result = run_audit(data, profile, cache / 'full-author-audit', offline=offline,
+                           retry_unresolved=retry_unresolved, **(audit_options or {}))
+        return write_outputs(result, cache, output)
     rows, summaries, supplemented = [], [], {}
     for paper in data['papers']:
         originals = [a.strip() for a in paper['detail']['authors'].split(',')]
@@ -107,6 +112,7 @@ def generate(data, cache, output, offline=False):
                                               truncated or ellipsis(paper['detail']['authors']))
             evidence_url = 'https://scholar.google.com/scholar?' + urllib.parse.urlencode({'q':'"'+item['title']+'"'})
             method = 'Scholar author record'
+            lookup_attempts = []
             # External checks only for explicit author-list ellipses. Initials
             # and a lack of external confirmation never cause uncertainty.
             if status == 'unresolved' and truncated and not ellipsis(paper['detail']['authors']):
@@ -114,7 +120,7 @@ def generate(data, cache, output, offline=False):
                 if key not in supplemented:
                     checked = reviewed.get(item['title'])
                     if checked:
-                        ev = dict(checked, complete=True)
+                        ev = dict(checked, complete=True, method='reviewed_author_list')
                     elif offline:
                         import hashlib
                         from enrich_authors import norm
@@ -122,16 +128,26 @@ def generate(data, cache, output, offline=False):
                         path = cache/'metadata'/(digest+'.json')
                         ev = json.loads(path.read_text()) if path.exists() else {}
                     else:
-                        ev = enrich(item, cache)
+                        ev = enrich(item, cache, retry_unresolved=True) if retry_unresolved else enrich(item, cache)
                     supplemented[key] = ev
                 ev = supplemented[key]
+                lookup_attempts = list(ev.get('attempts', []))
                 if ev.get('complete') and ev.get('authors'):
-                    authors = [{'name':a} for a in ev['authors']]
-                    status, overlap, reason = classify(originals, authors, ids, False)
-                    evidence_url = ev['source']
-                    method = 'Full author list supplement for Scholar ellipsis'
+                    validation = '' if ev.get('method') == 'reviewed_author_list' else validate_supplement(item, ev)
+                    expanded, conflict = align_authors(visible_authors(item), ev['authors'])
+                    if not validation and not conflict:
+                        authors = expanded
+                        status, overlap, reason = classify(originals, authors, ids, False)
+                        evidence_url = ev['source']
+                        method = 'Full author list supplement for Scholar ellipsis'
+                    else:
+                        lookup_attempts.append({'provider': 'author_alignment', 'stage': 'validation',
+                                                'reason': validation or conflict})
+                if status == 'unresolved' and lookup_attempts:
+                    latest = lookup_attempts[-1]
+                    reason += '; attempted ' + latest['provider'] + ': ' + latest['reason']
             years = re.findall(r'\b(?:19|20)\d{2}\b', (item.get('publication_info') or {}).get('summary', ''))
-            row = {'source_title':paper['paper']['title'], 'source_authors':'; '.join(originals),
+            row = {'author_lookup_attempts':lookup_attempts, 'source_title':paper['paper']['title'], 'source_authors':'; '.join(originals),
                    'source_scholar_url':paper['paper']['link'], 'citing_title':item['title'],
                    'citing_authors':'; '.join(a['name'] for a in authors),
                    'citing_year':years[-1] if years else '', 'citing_url':item.get('link') or '',
@@ -152,12 +168,17 @@ def generate(data, cache, output, offline=False):
               'papers':summaries, 'citation_edges':rows,
               'policy':'Scholar authoritative; IDs first, names otherwise; only explicit author ellipses remain uncertain.'}
     report['complete_snapshot'] = all(p['displayed']==p['retrieved'] and p['end_reason'] not in ('scholar_1000_limit','repeated_page') for p in summaries)
+    return write_outputs(report, cache, output)
+
+
+def write_outputs(report, cache, output):
+    rows = report['citation_edges']
     output.mkdir(parents=True, exist_ok=True)
     fields = ['source_title','source_authors','source_scholar_url','citing_title','citing_authors','citing_year','citing_url','status','overlapping_author','classification_basis','author_source','author_evidence_url','scholar_result_id']
     with (output/'independent_citations.csv').open('w',encoding='utf-8-sig',newline='') as f:
         writer=csv.DictWriter(f,fieldnames=fields)
         writer.writeheader()
-        writer.writerows(r for r in rows if r['status']=='independent')
+        writer.writerows({key: r[key] for key in fields} for r in rows if r['status']=='independent')
     cache.mkdir(parents=True, exist_ok=True)
     (cache/'audit.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
     render(report, output/'report.html')
@@ -181,8 +202,13 @@ def main():
     parser.add_argument('--cache-dir',type=Path)
     parser.add_argument('--snapshot',type=Path,help='Reuse a collected.json snapshot without SerpApi calls.')
     parser.add_argument('--offline',action='store_true')
+    parser.add_argument('--retry-unresolved',action='store_true',help='Retry incomplete metadata caches using the existing Scholar snapshot.')
+    parser.add_argument('--full-author-audit',action='store_true',help='Check full citing and source bylines; compatible initials remain unresolved.')
+    parser.add_argument('--audit-workers',type=int,default=4)
     parser.add_argument('--request-budget',type=int,default=200)
     args=parser.parse_args()
+    if args.offline and args.retry_unresolved:
+        parser.error('--retry-unresolved requires metadata access; omit --offline.')
     if args.snapshot:
         data=json.loads(args.snapshot.read_text())
         cache=args.cache_dir or args.snapshot.parent
@@ -200,7 +226,8 @@ def main():
             data=json.loads((cache/'collected.json').read_text())
         else:
             data=collect(author_id,str(cache),args.request_budget)
-    result=generate(data,cache,args.output_dir,args.offline)
+    result=generate(data,cache,args.output_dir,args.offline,args.retry_unresolved,
+                    args.full_author_audit, {'workers':args.audit_workers} if args.full_author_audit else None)
     print(json.dumps({k:v for k,v in result.items() if k not in ('papers','citation_edges')},ensure_ascii=False))
 
 
