@@ -28,7 +28,7 @@ Use a new output directory for each fresh snapshot. Internal caches live in `<ou
 - Exclude citations sharing **any** author with the cited paper, including the profile owner. Compare per paper, not against all lifetime collaborators.
 - **Scholar is authoritative.** Do not require external confirmation of an untruncated Scholar author record.
 - Compare Scholar author IDs when both sides have them. Equal IDs mean shared authors; different IDs take precedence over similar names.
-- Otherwise compare normalized names and conventional surname/initial forms. `T Xie` matches `Tian Xie`; `X Zhang` matches `Xueru Zhang`. These are definitive non-independent matches under the user's chosen convention. Initials, same-name possibilities, and lack of publisher confirmation do **not** cause uncertainty.
+- Otherwise compare normalized names and conventional surname/initial forms. `T Example` matches `Taren Example`; `X Sample` matches `Xerin Sample`. These are definitive non-independent matches under the user's chosen convention. Initials, same-name possibilities, and lack of publisher confirmation do **not** cause uncertainty.
 - **Only explicit author-list ellipses (`…` or `...`) justify unresolved classification.** Ignore ellipses in venues, titles, or snippets. A visible shared author already proves non-independence despite omitted remaining authors.
 - For author ellipses only, the script attempts full authors from the article page or a strictly title-matched Crossref record. If successful, classify normally; otherwise retain unresolved status. Never guess omitted authors.
 - Missing author data is a collection failure to investigate, not a guessed independent citation. Incomplete retrieval is a coverage problem, distinct from author uncertainty.

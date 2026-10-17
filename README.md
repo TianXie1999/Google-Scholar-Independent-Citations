@@ -14,7 +14,7 @@ A citing paper is independent of a source paper when they share **no authors**, 
 Google Scholar is the authoritative record:
 
 1. Compare Scholar author IDs when both sides provide them.
-2. Otherwise compare normalized names and conventional initials: for example, `J Smith` matches `John Smith`.
+2. Otherwise compare normalized names and conventional initials: for example, `J Example` matches `John Example`.
 3. Only explicit **author-list ellipses** require additional checking. Ellipses in venue names do not matter. Short names or missing publisher confirmation do not create an unresolved classification.
 4. For omitted authors, attempt to retrieve a complete author list from the article page or a title-matched Crossref record. Retain unresolved status if this fails.
 
@@ -46,6 +46,16 @@ python3 skills/scholar-independent-citations/scripts/report.py \
 ```
 
 The CSV uses UTF-8 with BOM for Excel compatibility. The HTML includes a link to the CSV, so keep the two files together.
+
+The HTML places the cited and citing author lists together, highlights the
+recorded match, and distinguishes Scholar-ID, full-name and initials matches.
+Name-based exclusions carry a potential false-positive warning: different people
+can share a name or initials. Use the identity-review filter and “Show author
+lists” to inspect those cases. Warnings do not change classifications or counts;
+the tool does not automatically disambiguate people or merge separately indexed
+versions. Linkless Scholar citation records remain visible with an explicitly
+labeled title-search link. Audit JSON retains record identifiers and evidence
+types; the CSV schema and two default deliverables are unchanged.
 
 Internal caches and the classification audit live in `output/.scholar-cache/AUTHOR_ID/`. Rerunning the command reuses this snapshot and resumes interrupted collection. To refresh the data, choose a new output directory.
 
