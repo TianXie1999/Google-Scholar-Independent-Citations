@@ -89,7 +89,7 @@ def classify(originals, citing, ids, truncated):
     return 'independent', '', 'No shared author in Scholar record'
 
 
-def generate(data, cache, output, offline=False, retry_unresolved=False):
+def generate(data, cache, output, offline=False, retry_unresolved=False, full_author_audit=False, audit_options=None):
     profile_path = cache / f"profile_{data['author_id']}.json"
     if not profile_path.exists():
         profile_path = cache / 'profile.json'  # legacy snapshot support
@@ -97,6 +97,11 @@ def generate(data, cache, output, offline=False, retry_unresolved=False):
     ids = known_ids(data, profile)
     reviewed_path = cache / 'reviewed_authors.json'
     reviewed = json.loads(reviewed_path.read_text()) if reviewed_path.exists() else {}
+    if full_author_audit:
+        from author_audit import run_audit
+        result = run_audit(data, profile, cache / 'full-author-audit', offline=offline,
+                           retry_unresolved=retry_unresolved, **(audit_options or {}))
+        return write_outputs(result, cache, output)
     rows, summaries, supplemented = [], [], {}
     for paper in data['papers']:
         originals = [a.strip() for a in paper['detail']['authors'].split(',')]
@@ -163,6 +168,11 @@ def generate(data, cache, output, offline=False, retry_unresolved=False):
               'papers':summaries, 'citation_edges':rows,
               'policy':'Scholar authoritative; IDs first, names otherwise; only explicit author ellipses remain uncertain.'}
     report['complete_snapshot'] = all(p['displayed']==p['retrieved'] and p['end_reason'] not in ('scholar_1000_limit','repeated_page') for p in summaries)
+    return write_outputs(report, cache, output)
+
+
+def write_outputs(report, cache, output):
+    rows = report['citation_edges']
     output.mkdir(parents=True, exist_ok=True)
     fields = ['source_title','source_authors','source_scholar_url','citing_title','citing_authors','citing_year','citing_url','status','overlapping_author','classification_basis','author_source','author_evidence_url','scholar_result_id']
     with (output/'independent_citations.csv').open('w',encoding='utf-8-sig',newline='') as f:
@@ -193,6 +203,8 @@ def main():
     parser.add_argument('--snapshot',type=Path,help='Reuse a collected.json snapshot without SerpApi calls.')
     parser.add_argument('--offline',action='store_true')
     parser.add_argument('--retry-unresolved',action='store_true',help='Retry incomplete metadata caches using the existing Scholar snapshot.')
+    parser.add_argument('--full-author-audit',action='store_true',help='Check full citing and source bylines; compatible initials remain unresolved.')
+    parser.add_argument('--audit-workers',type=int,default=4)
     parser.add_argument('--request-budget',type=int,default=200)
     args=parser.parse_args()
     if args.offline and args.retry_unresolved:
@@ -214,7 +226,8 @@ def main():
             data=json.loads((cache/'collected.json').read_text())
         else:
             data=collect(author_id,str(cache),args.request_budget)
-    result=generate(data,cache,args.output_dir,args.offline,args.retry_unresolved)
+    result=generate(data,cache,args.output_dir,args.offline,args.retry_unresolved,
+                    args.full_author_audit, {'workers':args.audit_workers} if args.full_author_audit else None)
     print(json.dumps({k:v for k,v in result.items() if k not in ('papers','citation_edges')},ensure_ascii=False))
 
 

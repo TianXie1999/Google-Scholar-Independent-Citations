@@ -111,3 +111,34 @@ The tests cover ID precedence, initial matching, author ellipses, per-paper clas
 ## License
 
 [MIT](LICENSE)
+
+## Full author audit (optional)
+
+Use `--full-author-audit` to inspect citing and cited bylines beyond the normal
+ellipsis-only supplement workflow. It includes records already classified from
+initials and untruncated lists. Source bylines can establish full names and middle
+initials. This mode uses trusted Scholar IDs first, then full normalized names;
+compatible initials remain unresolved. It does not infer person identities from
+affiliations, coauthors, topics or approximate titles. Exact same-name exclusions
+still need the review warnings from the paired-author interface.
+
+```sh
+python3 skills/scholar-independent-citations/scripts/report.py \
+  --scholar-url 'https://scholar.google.com/citations?user=AUTHOR_ID' \
+  --output-dir './audited-output' --full-author-audit
+```
+
+The audit checks primary metadata, exact OpenReview notes, explicit identifiers,
+Crossref and OpenAlex. Author-list completeness limits and conflicting candidates
+remain visible. DBLP XML and alternate/version URLs can be supplied as discovery
+evidence. Already reviewed document bylines, source identities and record links
+can be supplied through the audit API; the evidence-bundle follow-up adds the CLI
+workflow for those inputs. Full-audit caches retain author evidence and rejected
+candidates. No PDF extraction or automatic same-name disambiguation is performed.
+
+The standard-library implementation keeps Python 3.9 support and the same two
+default report files and thirteen CSV columns. Richer evidence levels and source
+author provenance stay in the internal audit. `--offline` never acquires metadata.
+The legacy Scholar-convention mode remains the default for compatibility.
+Use the paired-author interface change with this mode so the HTML presents the
+correct policy and evidence levels.

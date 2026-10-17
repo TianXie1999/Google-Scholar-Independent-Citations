@@ -62,3 +62,12 @@ do not combine it with `--offline`. Metadata failures retain sanitized lookup
 diagnostics. Describe failures as routes attempted rather than proof that a
 byline is unavailable. Do not merge separately indexed Scholar results or add
 automatic same-name author disambiguation.
+
+### Full author audit
+
+For broader metadata checking, add `--full-author-audit` to the normal command.
+It checks both cited and citing bylines, including untruncated records and earlier
+initial-based exclusions. In this explicit mode, compatible initials are
+unresolved rather than proof of shared identity. Full names and trusted Scholar
+IDs still drive classification; name-based exclusions need identity review.
+The legacy default is unchanged. Keep every archived source/result pair separate.
